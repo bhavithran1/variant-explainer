@@ -1,163 +1,236 @@
+import { useState, useRef } from 'react';
+import { Dna, Loader, AlertTriangle, Sun, Moon } from 'lucide-react';
 import { useDarkMode } from './hooks/useDarkMode';
-import DarkToggle from './components/DarkToggle';
-import { useState } from 'react';
-import { Dna, Loader, AlertTriangle, BookOpen } from 'lucide-react';
-import VariantSearchBar from './components/VariantSearchBar';
-import VariantCard from './components/VariantCard';
-import Disclaimer from './components/Disclaimer';
+import HeroSection from './components/HeroSection';
+import HowItWorks from './components/HowItWorks';
+import UploadSection from './components/UploadSection';
+import TerminalReport from './components/TerminalReport';
+import SampleReport from './components/SampleReport';
+import ClassificationGuide from './components/ClassificationGuide';
+import FAQSection from './components/FAQSection';
 import { searchClinVar, searchMyVariant, getGeneInfo } from './utils/api';
+import { analyzeReportWithClaude } from './utils/analyzeReport';
+
+const NAV_LINKS = [
+  { label: 'How it works', href: '#how-it-works' },
+  { label: 'Try it', href: '#try-it' },
+  { label: 'FAQ', href: '#faq' },
+];
 
 export default function App() {
   const [dark, toggleDark] = useDarkMode();
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState(null);
+  const [results, setResults] = useState(null);     // ClinVar results
   const [geneInfo, setGeneInfo] = useState(null);
+  const [aiText, setAiText] = useState(null);        // AI analysis text
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
+  const resultsRef = useRef(null);
+
+  function scrollToUpload() {
+    document.getElementById('try-it')?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function scrollToResults() {
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
 
   async function handleSearch(q) {
     setLoading(true);
     setError(null);
     setResults(null);
+    setAiText(null);
     setGeneInfo(null);
     setQuery(q);
     try {
-      // Try ClinVar first
       const clinvarResults = await searchClinVar(q);
-
-      // Also try myvariant.info for additional data
-      let myvariantData = null;
-      try {
-        myvariantData = await searchMyVariant(q);
-      } catch (e) { /* non-critical */ }
-
-      // Extract gene symbol to get gene background
-      const geneSymbol = clinvarResults[0]?.genes?.[0]?.symbol
-        || q.match(/^([A-Z][A-Z0-9]+)/)?.[1];
+      try { await searchMyVariant(q); } catch (_) {}
+      const geneSymbol = clinvarResults[0]?.genes?.[0]?.symbol || q.match(/^([A-Z][A-Z0-9]+)/)?.[1];
       if (geneSymbol) {
-        try {
-          const gInfo = await getGeneInfo(geneSymbol);
-          setGeneInfo(gInfo);
-        } catch (e) { /* non-critical */ }
+        try { setGeneInfo(await getGeneInfo(geneSymbol)); } catch (_) {}
       }
-
       setResults(clinvarResults);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      scrollToResults();
     }
   }
 
+  async function handleAnalyzeImage(base64, mimeType, apiKey) {
+    setLoading(true);
+    setError(null);
+    setResults(null);
+    setAiText(null);
+    setGeneInfo(null);
+    setQuery('');
+    try {
+      const text = await analyzeReportWithClaude(base64, mimeType, apiKey);
+      setAiText(text);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      scrollToResults();
+    }
+  }
+
+  const hasResult = results !== null || aiText !== null;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 dark:from-gray-950 dark:via-gray-900 dark:to-violet-950">
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="p-2 bg-violet-600 rounded-lg">
-            <Dna className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 antialiased transition-colors">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-white/90 dark:bg-gray-950/90 backdrop-blur border-b border-gray-100 dark:border-gray-800 transition-colors">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-blue-600 rounded-xl">
+              <Dna className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-bold text-gray-900 dark:text-white text-lg">GeneSimple</span>
           </div>
-          <div>
-            <h1 className="font-bold text-gray-900 dark:text-gray-100 text-sm leading-none">Plain-Language Variant Explainer</h1>
-            <p className="text-xs text-gray-400 mt-0.5">ClinVar · MyVariant.info · NCBI</p>
+
+          <nav className="hidden md:flex items-center gap-8">
+            {NAV_LINKS.map(link => (
+              <a key={link.href} href={link.href}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleDark}
+              className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={scrollToUpload}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl transition-colors"
+            >
+              Try it free
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Understand Your Genetic Variant</h2>
-          <p className="text-gray-500 dark:text-gray-400 max-w-lg mx-auto text-sm">
-            Translate genetic test results into plain language using the public ClinVar database — no medical jargon, no fee.
-          </p>
-        </div>
+      <HeroSection onScrollToUpload={scrollToUpload} />
+      <HowItWorks />
+      <UploadSection onSearch={handleSearch} onAnalyzeImage={handleAnalyzeImage} loading={loading} />
 
-        <Disclaimer />
-        <VariantSearchBar onSearch={handleSearch} loading={loading} />
-
+      {/* Results */}
+      <div ref={resultsRef}>
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-12">
-            <Loader className="w-6 h-6 text-violet-500 animate-spin" />
-            <span className="text-sm text-gray-500">Looking up variant in ClinVar…</span>
-          </div>
+          <section className="py-12 bg-white dark:bg-gray-900 transition-colors">
+            <div className="max-w-3xl mx-auto px-6 flex flex-col items-center gap-4">
+              <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+              <p className="text-base font-medium text-gray-500 dark:text-gray-400">
+                {aiText === null && results === null ? 'Analyzing your report with AI…' : 'Looking up your variant…'}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">This may take a few seconds</p>
+            </div>
+          </section>
         )}
 
         {error && (
-          <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-            <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
-          </div>
-        )}
-
-        {results !== null && !loading && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                {results.length > 0 ? `${results.length} result${results.length !== 1 ? 's' : ''} for "${query}"`
-                  : `No variants found for "${query}"`}
-              </h3>
-              <button onClick={() => { setResults(null); setQuery(''); }}
-                className="text-xs text-gray-400 hover:text-violet-600 transition-colors">
-                ← New search
-              </button>
-            </div>
-            {results.length === 0 && (
-              <div className="text-center py-8 text-gray-400">
-                <p className="text-sm">This variant was not found in ClinVar.</p>
-                <p className="text-xs mt-1">Try searching by gene name, rsID, or HGVS notation.</p>
-                <a href={"https://www.ncbi.nlm.nih.gov/clinvar/?term=" + encodeURIComponent(query)}
-                   target="_blank" rel="noopener noreferrer"
-                   className="text-xs text-violet-600 hover:underline mt-2 inline-block">
-                  Search directly on ClinVar →
-                </a>
-              </div>
-            )}
-            {results.map((v, i) => (
-              <VariantCard key={v.uid || i} variant={v} geneInfo={geneInfo} />
-            ))}
-          </div>
-        )}
-
-
-        {results === null && !loading && (
-          <div className="mt-8 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { icon: '🧬', title: 'Plain Language', desc: 'We translate clinical jargon like "Pathogenic" into words that make sense' },
-                { icon: '📊', title: 'Population Context', desc: 'See how common or rare your variant is across the general population' },
-                { icon: '🔬', title: 'Gene Background', desc: 'Learn what the affected gene normally does in your body' },
-              ].map(f => (
-                <div key={f.title} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center">
-                  <div className="text-2xl mb-2">{f.icon}</div>
-                  <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-1">{f.title}</h4>
-                  <p className="text-xs text-gray-500">{f.desc}</p>
+          <section className="py-8 bg-white dark:bg-gray-900 transition-colors">
+            <div className="max-w-3xl mx-auto px-6">
+              <div className="flex items-start gap-3 p-5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-2xl text-red-600 dark:text-red-400">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold mb-1">Something went wrong</p>
+                  <p className="text-sm">{error}</p>
+                  {error.toLowerCase().includes('api') && (
+                    <p className="text-xs mt-2 text-red-500 dark:text-red-400">
+                      Check that your API key is correct and has credits available at{' '}
+                      <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="underline">
+                        console.anthropic.com
+                      </a>.
+                    </p>
+                  )}
                 </div>
-              ))}
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-violet-500" /> Understanding Variant Classifications
-              </h4>
-              <div className="space-y-2">
-                {[
-                  { emoji: '⚠️', label: 'Pathogenic', desc: 'Strong scientific evidence that this variant causes a specific condition' },
-                  { emoji: '🔶', label: 'Likely Pathogenic', desc: 'Probably harmful, but not yet confirmed with the same certainty' },
-                  { emoji: '❓', label: 'Variant of Uncertain Significance (VUS)', desc: 'Not enough evidence yet — very common result, and classifications can change' },
-                  { emoji: '🔵', label: 'Likely Benign', desc: 'Probably harmless, based on current evidence' },
-                  { emoji: '✅', label: 'Benign', desc: 'Normal variation found in healthy people; not disease-causing' },
-                ].map(row => (
-                  <div key={row.label} className="flex items-start gap-3 text-sm">
-                    <span className="text-lg shrink-0">{row.emoji}</span>
-                    <div>
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{row.label}: </span>
-                      <span className="text-gray-500 dark:text-gray-400">{row.desc}</span>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
-          </div>
+          </section>
         )}
-      </main>
+
+        {hasResult && !loading && (
+          <section className="py-12 bg-white dark:bg-gray-900 transition-colors">
+            <div className="max-w-3xl mx-auto px-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-gray-900 dark:text-white text-lg">
+                  {aiText ? 'Your Report Analysis' : results?.length > 0 ? `Results for "${query}"` : `No results for "${query}"`}
+                </h3>
+                <button
+                  onClick={() => { setResults(null); setAiText(null); setQuery(''); }}
+                  className="text-sm text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                >
+                  ← New search
+                </button>
+              </div>
+
+              {results?.length === 0 && !aiText ? (
+                <div className="p-8 rounded-2xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
+                  <p className="text-gray-500 dark:text-gray-400 mb-2">This variant wasn't found in ClinVar.</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">
+                    Try searching by gene name (e.g. "BRCA1"), rsID, or upload a photo of your report to analyze it with AI.
+                  </p>
+                  <a href={"https://www.ncbi.nlm.nih.gov/clinvar/?term=" + encodeURIComponent(query)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                    Search directly on ClinVar →
+                  </a>
+                </div>
+              ) : (
+                <>
+                  <TerminalReport
+                    variants={results}
+                    geneInfo={geneInfo}
+                    query={query}
+                    aiText={aiText}
+                  />
+                  <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl text-sm">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-amber-700 dark:text-amber-400">
+                      <strong>Not medical advice.</strong> This is for educational purposes only.
+                      Always talk to your doctor or a{' '}
+                      <a href="https://www.nsgc.org/FindaGeneticCounselor" target="_blank" rel="noopener noreferrer"
+                        className="underline">certified genetic counselor</a> about your results.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+      </div>
+
+      <SampleReport />
+      <ClassificationGuide />
+      <div id="faq"><FAQSection /></div>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-100 dark:border-gray-800 py-12 bg-white dark:bg-gray-950 transition-colors">
+        <div className="max-w-5xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-600 rounded-lg">
+              <Dna className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-bold text-gray-900 dark:text-white">GeneSimple</span>
+            <span className="text-gray-400 text-sm ml-2">· For educational use only</span>
+          </div>
+          <div className="flex items-center gap-6 text-sm text-gray-400">
+            <a href="https://www.ncbi.nlm.nih.gov/clinvar/" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 dark:hover:text-blue-400">ClinVar</a>
+            <a href="https://myvariant.info/" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 dark:hover:text-blue-400">MyVariant.info</a>
+            <a href="https://www.nsgc.org/FindaGeneticCounselor" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 dark:hover:text-blue-400">Find a Counselor</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
