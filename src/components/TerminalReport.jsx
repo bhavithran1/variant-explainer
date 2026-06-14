@@ -102,7 +102,7 @@ export default function TerminalReport({ variants, geneInfo, query, aiText }) {
   const [currentLine, setCurrentLine] = useState(0);
   const [currentChar, setCurrentChar] = useState(0);
   const [done, setDone] = useState(false);
-  const bottomRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     setDisplayed([]);
@@ -140,8 +140,9 @@ export default function TerminalReport({ variants, geneInfo, query, aiText }) {
   }, [currentLine, currentChar, done, lines, isAI]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [displayed]);
+    const el = containerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [displayed, currentChar]);
 
   const currentTyping = !done && currentLine < lines.length ? lines[currentLine].slice(0, currentChar) : null;
 
@@ -168,7 +169,7 @@ export default function TerminalReport({ variants, geneInfo, query, aiText }) {
       </div>
 
       {/* Terminal body */}
-      <div className="bg-gray-950 p-5 min-h-48 max-h-[480px] overflow-y-auto font-mono text-sm leading-relaxed">
+      <div ref={containerRef} className="bg-gray-950 p-5 min-h-48 max-h-[480px] overflow-y-auto font-mono text-sm leading-relaxed">
         {displayed.map((line, i) => (
           <div key={i} className={lineColor(line)}>
             {line || ' '}
@@ -179,7 +180,6 @@ export default function TerminalReport({ variants, geneInfo, query, aiText }) {
             {currentTyping}<span className="animate-pulse text-blue-400">▋</span>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

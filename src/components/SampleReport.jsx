@@ -61,7 +61,7 @@ export default function SampleReport() {
   const [done, setDone] = useState(false);
   const [started, setStarted] = useState(false);
   const sectionRef = useRef(null);
-  const bottomRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -101,8 +101,9 @@ export default function SampleReport() {
   }, [started, currentLine, currentChar, done]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [displayed]);
+    const el = containerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [displayed, currentChar]);
 
   const currentTyping = !done && started && currentLine < SAMPLE_LINES.length
     ? SAMPLE_LINES[currentLine].slice(0, currentChar)
@@ -124,7 +125,7 @@ export default function SampleReport() {
             <span className="ml-3 text-xs text-gray-400 font-mono">GeneSimple — AI medical report analysis — sample_blood_test.jpg</span>
           </div>
 
-          <div className="bg-gray-950 p-6 h-96 overflow-y-auto font-mono text-sm leading-7">
+          <div ref={containerRef} className="bg-gray-950 p-6 h-96 overflow-y-auto font-mono text-sm leading-7">
             {displayed.map((line, i) => (
               <div key={i} className={lineColor(line)}>{line || ' '}</div>
             ))}
@@ -136,7 +137,6 @@ export default function SampleReport() {
             {!started && (
               <div className="text-gray-600 text-xs">Scroll down to start the demo...</div>
             )}
-            <div ref={bottomRef} />
           </div>
         </div>
 
